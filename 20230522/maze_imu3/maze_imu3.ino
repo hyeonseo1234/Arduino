@@ -1,6 +1,6 @@
 /////////////////////// PID //////////////////////////
 
-double Kp=2, Ki=0.0, Kd=0.4;
+double Kp=1.7, Ki=0.0, Kd=0.8;
 
 ///////////////////// Driving ////////////////////////
 
@@ -182,31 +182,13 @@ void wall_collision_avoid(int base_speed)
 
 void imu_rotation(void) {
   bool flag = 1;  // bool type - 0 or 1
-  while (flag) {
-    compass.read();
-    float heading1 = compass.heading();
-    compass.read();
-    float heading2 = compass.heading();
+  while (flag) 
+  {
 
-    heading_angle = (heading1 + heading2) / 2;
-
-    heading_angle = 360 - heading_angle;  // 회전 좌표계를 반시계 방향으로 전환
-
-    Serial.println(heading_angle);
-
-    heading_angle_error = target_heading_angle - heading_angle;
-
-    if (heading_angle_error > 180) {
-      heading_angle_error = heading_angle_error - 360;
-    }
-    else if (heading_angle_error < -180) {
-      heading_angle_error = heading_angle_error + 360;
-    }
-    else {
-
-    }
+    read_imu_sensor();
+ 
     if (heading_angle_error > THRESHOLD_ANGLE1) { // 반시계 방향으로 회전
-      motor_L_control(-120);
+      motor_L_control(-100);
       motor_R_control(100);
     }
     else if ((heading_angle_error >= THRESHOLD_ANGLE2) && (heading_angle_error <= THRESHOLD_ANGLE1)) { // 정지
@@ -223,10 +205,10 @@ void imu_rotation(void) {
       motor_R_control(80);
     }
     else { // heading_angle_error < -THRESHOLD_ANGLE1 // 시계방향으로 회전
-      motor_L_control(120);
+      motor_L_control(100);
       motor_R_control(-100);
     }
-    Serial.print("Heading Angle Error : ");
+  Serial.print("Heading Angle Error : ");       //시리얼 모니터 확인용
   Serial.print(heading_angle_error);  // heading angle error 표시
   Serial.print(" = ");
   Serial.print(target_heading_angle);
@@ -234,45 +216,8 @@ void imu_rotation(void) {
   Serial.println(heading_angle); // headning_angle 표시
   }
 }
-void run_heading_angle(void)
+void read_sonar_sensor(void)
 {
-  double Output;
-  
-  compass.read();
-  float heading1 = compass.heading();
-  compass.read();
-  float heading2 = compass.heading();
-  heading_angle = (heading1 + heading2) / 2;
-  heading_angle = 360 - heading_angle;
-
-  heading_angle_error = target_heading_angle - heading_angle;
-
-  if (heading_angle_error > 180)
-  {
-    heading_angle_error = heading_angle_error - 360;
-  }
-  else if (heading_angle_error < -180)
-  {
-    heading_angle_error = heading_angle_error + 360;
-  }
-  else
-  {
-
-  }
-  Output = Kp * heading_angle_error;
-
-/*
-  if(heading_angle_error > 30)           Output = 40;
-  else if ( heading_angle_error < -30)    Output = -40;
-  else Output = Kp * heading_angle_error;
-*/
-
-  motor_R_control(80 + Output);
-  motor_L_control(80 - Output);
-
-}
-
-void loop() {
   float front_sonar1 = sonar[Front].ping_cm() * 10; // 전방 센서 측정
   float left_sonar1 = sonar[Left].ping_cm() * 10;  // 좌측 센서 측정
   float right_sonar1 = sonar[Right].ping_cm() * 10; // 우측 센서 측정
@@ -289,9 +234,61 @@ void loop() {
   left_sonar = (left_sonar1 + left_sonar2 + left_sonar3) / 3;
   right_sonar = (right_sonar1 + right_sonar2 + right_sonar3) / 3;
 
-  if (front_sonar == 0.0)  front_sonar = MAX_DISTANCE;
-  if (left_sonar == 0.0)  left_sonar = MAX_DISTANCE;
-  if (right_sonar == 0.0)  right_sonar = MAX_DISTANCE;
+  if (front_sonar == 0.0)  front_sonar = MAX_DISTANCE*10;
+  if (left_sonar == 0.0)  left_sonar = MAX_DISTANCE*10;
+  if (right_sonar == 0.0)  right_sonar = MAX_DISTANCE*10;
+}
+
+void read_imu_sensor(void)
+{
+  compass.read();
+  float heading1 = compass.heading();
+  compass.read();
+  float heading2 = compass.heading();
+  heading_angle = (heading1 + heading2) / 2;
+  heading_angle = 360 - heading_angle;
+
+  heading_angle_error = target_heading_angle - heading_angle;
+  if (heading_angle_error > 180)
+  {
+    heading_angle_error = heading_angle_error - 360;
+  }
+  else if (heading_angle_error < -180)
+  {
+    heading_angle_error = heading_angle_error + 360;
+  }
+  else
+  {
+
+  }
+}
+void run_heading_angle(void)
+{
+  bool flag = 1;
+  double Output;
+
+  while(flag)
+  {
+    read_sonar_sensor();
+    read_imu_sensor();
+    Output = Kp * heading_angle_error;
+    motor_R_control(80 + Output);    motor_L_control(80 - Output);
+
+    if(front_sonar < 200)
+    {
+      flag = 0;
+      motor_R_control(0);    motor_L_control(0);
+    }
+/*
+  if(heading_angle_error > 30)           Output = 40;
+  else if ( heading_angle_error < -30)    Output = -40;
+  else Output = Kp * heading_angle_error;
+*/
+  }
+
+}
+
+void loop() {
 
   /*
   target_heading_angle = 130;
@@ -304,6 +301,12 @@ void loop() {
   */
   target_heading_angle = 130;
   run_heading_angle();
+  delay(2000);
+  target_heading_angle = 130-100;
+  imu_rotation();
+  delay(2000);
+  run_heading_angle();
+
 
   Serial.print("L: "); Serial.print(left_sonar);   Serial.print("  ");
   Serial.print("F: "); Serial.print(front_sonar);  Serial.print("  ");
@@ -318,65 +321,3 @@ void loop() {
 
   check_maze_status();
 }
-
-/*
-   if(maze_status == 4)
-  {
-     // 정지
-    motor_A_control(HIGH,0);
-    motor_B_control(LOW,0);
-    delay(700);
-    //180회전을 한다
-    Serial.println("Rotate CCW");
-    motor_A_control(LOW,115); // 오른쪽 전진
-    motor_B_control(HIGH,130); // 오른쪽 후진
-    delay(995);
-    motor_A_control(HIGH,0); // 오른쪽 전진
-    motor_B_control(LOW,0); // 오른쪽 후진
-    delay(700);
-  }
-  else if( maze_status == 1)
-  { // 좌우 벽만 있을 때 직전
-    Serial.println("run_straight");
-    wall_collision_avoid(80);
-  }
- 
-   else if( maze_status == 2)
-  { 
-    // 정지   
-    motor_A_control(HIGH,0);  // 오른쪽 정지
-    motor_B_control(LOW ,0);  // 왼쪽은 정지
-    delay(50);  
-    // 시계방향 90
-    Serial.println("Rotate CCW");
-    motor_A_control(LOW,85);  // 오른쪽 직진
-    motor_B_control(HIGH,100);  // 왼쪽은 후진
-    delay(612);               // 일정한 시간 동안 회전
-    motor_A_control(HIGH,0);  // 오른쪽 정지
-    motor_B_control(LOW ,0);  // 왼쪽은 정지
-    delay(50);
-  }
-   else if ( maze_status == 3)
-  { 
-    // 정지   
-    motor_A_control(HIGH,0);  // 오른쪽 정지
-    motor_B_control(LOW ,0);  // 왼쪽은 정지
-    delay(50);  
-   // 90도 회전 반시계 방향으로 회전
-    Serial.println("Rotate CCW");
-    motor_A_control(HIGH,85);  // 오른쪽 직진
-    motor_B_control(LOW,100);  // 왼쪽은 후진
-    delay(605);               // 일정한 시간 동안 회전
-    motor_A_control(HIGH,0);  // 오른쪽 정지
-    motor_B_control(LOW ,0);  // 왼쪽은 정지
-    delay(50);
-  }
-   else
-  {
-    Serial.println("Go straight");
-    motor_A_control(HIGH, 85);
-    motor_B_control(HIGH, 100);
-  }
-  
-}
-*/
